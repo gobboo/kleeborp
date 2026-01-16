@@ -1,0 +1,24 @@
+[project]
+name = "kleeborp-ai"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+	"chromadb>=1.4.1",
+	"discord-ext-voice-recv",
+	"discord-py>=2.6.4",
+	"faster-whisper>=1.2.1",
+	"mcp[cli]>=1.25.0",
+	"numpy<2.4",
+	"openai==1.97.0",
+	"packaging>=25.0",
+	"pynacl>=1.5.0,<1.6",
+	"realtimetts[azure,elevenlabs]==0.5.7",
+	"setuptools>=80.9.0",
+	"sounddevice>=0.5.3",
+	"soundfile>=0.13.1",
+	"torch>=2.9.1",
+	"torchaudio>=2.9.1",
+	"websockets>=16.0",
+]

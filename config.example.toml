@@ -1,0 +1,46 @@
+[llm]
+api_key = "sk-..."
+base_url = "https://openrouter.ai/api/v1"
+model = "deepseek/deepseek-v3.2"
+temperature = 0.7
+max_tokens = 4096
+
+[llm.timeouts]
+connect = 10
+read = 60
+
+[modules.brain]
+enabled = true
+interrupt_window = 5.0
+
+[modules.memory]
+enabled = true
+rag_enabled = true
+memory_interval = 40
+
+[modules.discord]
+enabled = true
+token = "your-bot-token"
+auto_join = true
+
+[modules.tts]
+enabled = true
+provider = "elevenlabs"
+voice_id = "21m00Tcm4TlvDq8ikWAM"
+
+[websocket]
+host = "localhost"
+port = 8765
+
+[mcp.servers.filesystem]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed"]
+
+[mcp.servers.brave_search]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-brave-search"]
+env = { BRAVE_API_KEY = "your-key" }
+
+[logging]
+level = "INFO"
+format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
