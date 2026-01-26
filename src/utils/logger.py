@@ -85,6 +85,7 @@ class KleeborgLogFilter(logging.Filter):
         "services.",
         "utils.",
         "__main__",
+        "discord",
         "root",  # Allow root logger messages
     )
 

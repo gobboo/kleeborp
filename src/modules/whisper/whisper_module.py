@@ -23,7 +23,7 @@ class WhisperModule(BaseModule):
         self._stt_queue = asyncio.Queue()
 
         self._model = WhisperModel(
-            model_size_or_path=config.get("model", "distil-large-v3.5"),
+            model_size_or_path=config.get("model", "distil-large-v3"),
             device="cuda",
             compute_type="float16",
             num_workers=config.get("num_workers", 5),
@@ -73,13 +73,11 @@ class WhisperModule(BaseModule):
             segments = await loop.run_in_executor(
                 self._executor, self._blocking_transcribe, audio_data
             )
-            
-            self.logger.info(segments)
-            
+                        
             text = " ".join(
                 segment.text
                 for segment in segments
-                if segment.no_speech_prob < 0.1  # More lenient threshold
+                if segment.no_speech_prob < 0.4  # More lenient threshold
             ).strip()
 
             if not text:
@@ -143,7 +141,7 @@ class WhisperModule(BaseModule):
             ),
         )
 
-        logger.debug("audio transcribed")
+        self.logger.info(f"audio transcribed {segments}")
 
         return list(segments)
 

@@ -46,7 +46,7 @@ class DiscordModule(BaseModule):
 
     async def get_prompt_fragment(self):
         # return the current discord state
-        prompt = f'This is ambient context. Not everything here requires a response.\nCurrent date time: {datetime.now()}\nCURRENT VOICE CHANNEL STATE: \nUsers Present:\n'
+        prompt = f'This is ambient context. Not everything here requires a response.\nCURRENT VOICE CHANNEL STATE: \nUsers Present:\n'
         
         users = self.voice_manager.get_users_in_channel()
 
@@ -88,7 +88,7 @@ class DiscordModule(BaseModule):
         await self.voice_manager.on_voice_state_update(member, before, after)
 
     async def _setup(self):
-        return await super()._setup()
+        pass
 
     async def _run(self):
         try:

@@ -1,287 +1,176 @@
-# modules/speech/tts_module.py
 import asyncio
-import re
-from RealtimeTTS import TextToAudioStream, AzureEngine, ElevenlabsEngine
-from events import EventType, event_handler, Event, EventPriority
+import logging
+from queue import Empty, Queue
+from events import event_handler, EventType, Event
 from modules.base import BaseModule
+from azure.cognitiveservices.speech import SpeechSynthesizer, SpeechConfig, audio, ResultReason, CancellationReason, SpeechSynthesisRequestInputType, SpeechSynthesisOutputFormat, SpeechSynthesisRequest
+
+class PushAudioOutputStreamSampleCallback(audio.PushAudioOutputStreamCallback):
+    """
+    Example class that implements the PushAudioOutputStreamCallback, which is used to show
+    how to push output audio to a stream
+    """
+    def __init__(self) -> None:
+        super().__init__()
+        
+        self.logger = logging.getLogger(__name__)
+        self._audio_data = bytes(0)
+        self._frame_buffer = bytes(0)
+        self.audio_queue = Queue()
+        self._closed = False
+
+    def write(self, audio_buffer: memoryview) -> int:
+        """
+        The callback function which is invoked when the synthesizer has an output audio chunk
+        to write out
+        """
+        self._audio_data += audio_buffer
+        self._frame_buffer += audio_buffer
+        
+        while len(self._frame_buffer) >= 1920:
+            # take the first 1920 bytes
+            mono_bytes = self._frame_buffer[0:1920]
+
+            stereo_bytes = self._convert_to_stereo(mono_bytes)
+            self.audio_queue.put(stereo_bytes)
+
+            self._frame_buffer = self._frame_buffer[1920:]
+        
+        return audio_buffer.nbytes
+    
+    def _convert_to_stereo(self, pcm: bytes):
+        stereo = bytearray(len(pcm) * 2)
+
+        j = 0
+        for i in range(0, len(pcm), 2):
+            sample = pcm[i:i+2]
+            stereo[j:j+2] = sample      # Left
+            stereo[j+2:j+4] = sample    # Right
+            j += 4
+
+        return bytes(stereo)
+
+    def close(self) -> None:
+        """
+        The callback function which is invoked when the synthesizer is about to close the
+        stream.
+        """
+        self.audio_queue.put(None)
+        self._closed = True
+
+    def get_audio_data(self) -> bytes:
+        return self._audio_data
+
+    def get_audio_size(self) -> int:
+        return len(self._audio_data)
 
 class TTSModule(BaseModule):
-    def __init__(self, event_bus, module_manager, config):
-        super().__init__("tts", event_bus, module_manager, config)
-        
-        self.text_buffer = ""
-        self.sentence_pattern = re.compile(r'[.!?]+\s+')
-        
-        # Azure TTS engine
-        self.engine = None
-        self.stream = None
-        
-        # Queue for sequential playback
-        self._synthesis_queue = asyncio.Queue()
-        self._synthesis_worker_task = None
-        self._is_synthesizing = False
-        self._event_loop = None
+    def __init__(self, event_bus, module_manager, config = None):
+        super().__init__('tts', event_bus, module_manager, config)
+
+        self.speech_config = SpeechConfig(
+            subscription=self.config["speech_key"],
+            endpoint=self.config["speech_endpoint"],
+        )
+
+        self.speech_config.speech_synthesis_voice_name=self.config["voice"]
+        self.speech_config.set_speech_synthesis_output_format(SpeechSynthesisOutputFormat.Raw48Khz16BitMonoPcm)
+
+        self.callback = PushAudioOutputStreamSampleCallback()
 
         self._is_speaking = False
-    
-    async def _setup(self):
-        """Initialize Azure TTS engine"""
-        try:
-            self._event_loop = asyncio.get_event_loop()
-
-            # Validate config
-            speech_key = self.config.get('azure_speech_key')
-            speech_region = self.config.get('azure_speech_region')
-            
-            if not speech_key or 'your-azure' in speech_key.lower():
-                raise ValueError(
-                    "❌ Azure Speech Key not configured!\n"
-                    "Get your key from: https://portal.azure.com\n"
-                    "Create a Speech Service resource, then set:\n"
-                    "  azure_speech_key = 'YOUR_KEY_HERE'\n"
-                    "  azure_speech_region = 'YOUR_REGION' (e.g., 'eastus')"
-                )
-            
-            self.logger.info(f"Initializing Azure TTS (region: {speech_region})")
-            
-            # Create Azure engine
-            self.engine = AzureEngine(
-                speech_key=speech_key,
-                service_region=speech_region,
-                voice=self.config.get('voice', 'en-US-AriaNeural'),
-                pitch=25,
-                audio_format='riff-48khz-16bit-mono-pcm'
-            )
-            
-            # self.engine = ElevenlabsEngine(api_key="sk_735e71b569a3d3c5b934450216b892f436200bad98e628d7",
-            #                                id="6nSuAMirWdAYpq0GlSTA", model="eleven_v3")
-            
-            # Create stream with muted=True (we handle playback via chunks)
-            self.stream = TextToAudioStream(
-                self.engine,
-                muted=False,
-            )
-            
-            self.logger.info(f"✓ Azure TTS ready (voice: {self.config.get('voice')})")
-            
-        except Exception as e:
-            self.logger.error(f"❌ Failed to initialize Azure TTS: {e}", exc_info=True)
-            raise
-    
-    @event_handler(EventType.LLM_TEXT_CHUNK)
-    async def on_text_chunk(self, event: Event):
-        """Buffer and process text chunks"""
-        text = event.data.get("text", "")
-        self.text_buffer += text
-        
-        # Check for complete sentences
-        sentences = self.sentence_pattern.split(self.text_buffer)
-        
-        if len(sentences) > 1:
-            # Queue all complete sentences
-            for sentence in sentences[:-1]:
-                cleaned = sentence.strip()
-                if cleaned:
-                    await self._queue_sentence(cleaned)
-            
-            # Keep incomplete sentence in buffer
-            self.text_buffer = sentences[-1]
+        self.loop = None
     
     @event_handler(EventType.LLM_GENERATION_COMPLETE)
-    async def on_generation_complete(self, event: Event):
-        """Process any remaining buffered text"""
-        if self.text_buffer.strip():
-            await self._synthesis_queue.put(self.text_buffer.strip())
-            self.text_buffer = ""
+    async def on_llm_completion(self, event: Event):
+        # we now have text "Hey hows it going blah blah blah"
+        # So lets send a request to TTS and stream the output
+        content = event.data["message"]
 
-    async def _queue_sentence(self, text: str):
-        """
-        Queue a sentence for synthesis.
-        Emits TTS_STARTED on first sentence if not already speaking.
-        """
-        # If queue was empty and we're not speaking, we're about to start
-        was_empty = self._synthesis_queue.empty() and not self._is_synthesizing
+        await self.event_bus.emit(
+            Event(EventType.TTS_STARTED)
+        )
         
-        # Add to queue
-        await self._synthesis_queue.put(text)
-        
-        # Emit TTS_STARTED only when starting fresh
-        if was_empty and not self._is_speaking:
-            self._is_speaking = True
-            self.logger.info("🎤 TTS Started (queue was empty)")
-            await self.event_bus.emit(Event(
-                type=EventType.TTS_STARTED,
-                source="tts"
-            ))
-    
-    @event_handler(EventType.INTERRUPT, priority=EventPriority.HIGH.value)
-    async def on_interrupt(self, event: Event):
-        """Stop current TTS playback immediately"""
-        self.logger.info("🛑 TTS interrupted")
-        
-        # Clear buffer
-        self.text_buffer = ""
-        
-        # Clear queue
-        while not self._synthesis_queue.empty():
-            try:
-                self._synthesis_queue.get_nowait()
-            except asyncio.QueueEmpty:
-                break
-        
-        # Stop stream immediately
-        if self.stream:
-            self.stream.stop()
-        
-        self._is_synthesizing = False
-        
-        # Mark as no longer speaking
-        if self._is_speaking:
-            self._is_speaking = False
-       
-            await self.event_bus.emit(Event(
-                type=EventType.TTS_COMPLETE,
-                source="tts"
-            ))
-    
+        self.loop.run_in_executor(None,
+            self._create_tts_stream,
+            content,
+        )
+
+    def _create_tts_stream(self, text: str):
+        try:
+            # here is where we create the AsyncIterator
+            # we loop over the chunks and as we do we emit the audio chunks for
+            # other modules to listen to
+            if not self.callback:
+              self.callback = PushAudioOutputStreamSampleCallback()
+
+            stream = audio.PushAudioOutputStream(self.callback)
+            audio_config = audio.AudioOutputConfig(stream=stream)
+
+            synthesizer = SpeechSynthesizer(
+                speech_config=self.speech_config,
+                audio_config=audio_config
+            )
+
+            ssml_string = f"""
+<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
+    <voice name="{self.config["voice"]}">
+        <prosody pitch="25%">
+            {text}
+        </prosody>
+    </voice>
+</speak>
+"""
+
+            result = synthesizer.speak_ssml_async(ssml_string).get()
+
+            if result.reason == ResultReason.SynthesizingAudioCompleted:
+                self.logger.info("Speech synthesized for text [{}], and the audio was written to output stream.".format(text))
+            elif result.reason == ResultReason.Canceled:
+                cancellation_details = result.cancellation_details
+                self.logger.info("Speech synthesis canceled: {}".format(cancellation_details.reason))
+                if cancellation_details.reason == CancellationReason.Error:
+                    self.logger.info("Error details: {}".format(cancellation_details.error_details))
+            
+            del result
+            del synthesizer
+
+            self.logger.info("successfully deleted result and synthesiser")
+        except Exception as e:
+            self.logger.error(e, exc_info=True)
+            raise
+        finally:
+            self.logger.info("cleaning up tts")
+            synthesizer.stop_speaking_async().get()
+
+            self.callback.close()
+            self.callback = None
+            self.logger.info("cleaned up tts")
+            
+
     async def _run(self):
-        """Start synthesis worker"""
-        self._synthesis_worker_task = asyncio.create_task(self._synthesis_worker())
-        
-        try:
-            await self._synthesis_worker_task
-        except asyncio.CancelledError:
-            self.logger.info("TTS module cancelled")
-            raise
-    
-    async def _synthesis_worker(self):
-        """
-        Worker that processes TTS queue sequentially.
-        Emits TTS_COMPLETE when queue is empty.
-        """
-        self.logger.info("TTS synthesis worker started")
-        
-        try:
-            while self._running:
-                try:
-                    # Get next text with timeout
-                    text = await asyncio.wait_for(
-                        self._synthesis_queue.get(),
-                        timeout=0.1
-                    )
-                    
-                    # Synthesize this text (blocks until complete)
-                    await self._synthesize_text(text)
-                    
-                    # Check if queue is now empty
-                    if self._synthesis_queue.empty():
-                        # All done speaking!
-                        if self._is_speaking:
-                            self._is_speaking = False
-                            self.logger.info("✅ TTS Complete (queue empty)")
-                            await self.event_bus.emit(Event(
-                                type=EventType.TTS_COMPLETE,
-                                source="tts"
-                            ))
-                    
-                except asyncio.TimeoutError:
-                    continue
-                    
-        except asyncio.CancelledError:
-            self.logger.info("TTS worker cancelled")
-            raise
-        except Exception as e:
-            self.logger.error(f"Error in TTS worker: {e}", exc_info=True)
-        finally:
-            self.logger.info("TTS worker stopped")
-    
-    async def _synthesize_text(self, text: str):
-        """Synthesize a single text segment (no events here)"""
-        if self._is_synthesizing:
-            self.logger.warning("Already synthesizing, skipping")
-            return
-        
-        self._is_synthesizing = True
-        
-        try:
-            self.logger.debug(f"🎤 Synthesizing: {text[:50]}...")
-            
-            # Run synthesis in executor
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None,
-                self._blocking_synthesis,
-                text
-            )
-            
-            self.logger.debug(f"✓ Synthesis complete")
-            
-        except Exception as e:
-            self.logger.error(f"❌ Synthesis error: {e}", exc_info=True)
-            
-            await self.event_bus.emit(Event(
-                type=EventType.TTS_ERROR,
-                data={'text': text, 'error': str(e)},
-                source="tts"
-            ))
-        finally:
-            self._is_synthesizing = False
-    
-    def _blocking_synthesis(self, text: str):
-        """Blocking synthesis (runs in executor)"""
-        try:
-            self.stream.feed(text)
-            self.stream.play(
-                on_audio_chunk=self._on_audio_chunk,
-                muted=False,
-                log_synthesized_text=False
-            )
-        except Exception as e:
-            self.logger.error(f"Blocking synthesis error: {e}")
-            raise
-    
-    def _on_audio_chunk(self, chunk: bytes):
-        """Callback from RealtimeTTS (runs in RealtimeTTS thread)"""
-        if not self._event_loop or self._event_loop.is_closed():
-            self.logger.error("Event loop not available for audio callback")
-            return
-        
-        try:
-            asyncio.run_coroutine_threadsafe(
-                self._emit_audio_chunk(chunk),
-                self._event_loop
-            )
-        except Exception as e:
-            self.logger.error(f"Error in audio chunk callback: {e}")
-    
-    async def _emit_audio_chunk(self, chunk: bytes):
-        """Emit audio chunk event"""
-        try:
-            await self.event_bus.emit(Event(
-                type=EventType.TTS_AUDIO_CHUNK,
-                data={"audio": chunk},
-                source="tts"
-            ))
-        except Exception as e:
-            self.logger.error(f"Error emitting audio chunk: {e}")
+        while self._running:
+            try:
+              chunk = await asyncio.to_thread(self.callback.audio_queue.get, False)
+
+              if chunk is None:
+                  await self.event_bus.emit(Event(
+                      type=EventType.TTS_EXHAUSTED
+                  ))
+
+                  continue
+
+              await self.event_bus.emit(
+                  Event(EventType.TTS_AUDIO_CHUNK, data={"audio": chunk})
+              )
+            except Empty as e:
+                continue
+              
     
     async def _cleanup(self):
-        """Cleanup TTS resources"""
-        self.logger.info("Cleaning up TTS module")
-        
+        self.logger.info("cleaning up tts")
         self._running = False
-        
-        if self._synthesis_worker_task and not self._synthesis_worker_task.done():
-            self._synthesis_worker_task.cancel()
-            try:
-                await self._synthesis_worker_task
-            except asyncio.CancelledError:
-                pass
-        
-        if self.stream:
-            self.stream.stop()
-        
-        if self.engine:
-            self.engine.shutdown()
-        
-        self.logger.info("TTS cleanup complete")
+        self.callback.close()
+
+    async def _setup(self):
+        self.loop = asyncio.get_event_loop()

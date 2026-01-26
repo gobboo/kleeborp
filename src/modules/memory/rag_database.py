@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from uuid import uuid4
 import chromadb
 
@@ -9,6 +10,8 @@ class RAGDatabase:
             path=config["chroma_path"],
             settings=chromadb.Settings(anonymized_telemetry=False),
         )
+        
+        self.logger = logging.getLogger(__name__)
 
         self.collection: chromadb.Collection = None
         self.config = config
@@ -19,8 +22,8 @@ class RAGDatabase:
     async def query_relevant_entries(self, input: str) -> list[str]:
         return await asyncio.to_thread(self._query_relevant_entries_sync, input)
 
-    async def upsert(self, document: str):
-        return await asyncio.to_thread(self._upsert_sync, document)
+    async def upsert(self, document: str, metadata=dict):
+        return await asyncio.to_thread(self._upsert_sync, document, metadata)
 
     def _create_if_not_exists_sync(self):
         return self.database.create_collection("memories", get_or_create=True)
@@ -29,21 +32,23 @@ class RAGDatabase:
         results = self.collection.query(
             query_texts=[input], n_results=3, include=["documents", "distances"]
         )
+        
+        self.logger.info(f'got results for input: {results}')
 
-        docs = results["documents"][0]
-        dists = results["distances"][0]
+        # docs = results["documents"][0]
+        # dists = results["distances"][0]
 
-        MAX_DISTANCE = 1.0 - self.config["minimum_distance"]
+        # MAX_DISTANCE = 1.0 - self.config["minimum_distance"]
 
-        return_results = []
+        # return_results = []
 
-        for doc, dist in zip(docs, dists):
-            if dist <= MAX_DISTANCE:
-                return_results.append(doc)
+        # for doc, dist in zip(docs, dists):
+        #     if dist <= MAX_DISTANCE:
+        #         return_results.append(doc)
 
-        return return_results
+        return results["documents"][0]
 
-    def _upsert_sync(self, document: str):
+    def _upsert_sync(self, document: str, metadata: dict):
         self.collection.upsert(
-            ids=[str(uuid4())], documents=[document], metadatas=[{"type": "short-term"}]
+            ids=[str(uuid4())], documents=[document], metadatas=[metadata]
         )

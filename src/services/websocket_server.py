@@ -7,15 +7,16 @@ from core.event_bus import Event, EventBus
 from core.module_manager import ModuleManager
 import websockets
 
-logger = logging.getLogger(__name__)
+from modules.games.game_module import GameModule
 
+logger = logging.getLogger(__name__)
 
 class WebSocketServer:
     def __init__(
         self,
         module_manager: ModuleManager,
         event_bus: EventBus,
-        host: str = "localhost",
+        host: str = "0.0.0.0",
         port: int = 8765,
     ):
         self.module_manager = module_manager
@@ -23,19 +24,23 @@ class WebSocketServer:
         self.host = host
         self.port = port
         self._clients: Set[websockets.WebSocketServerProtocol] = set()
+        
+        self.game_module: GameModule | None = None
 
     async def start(self):
         """Start WebSocket server"""
         logger.info(f"Starting WebSocket server on {self.host}:{self.port}")
+        self.game_module = self.module_manager.get_module('game')
+        stop = asyncio.get_running_loop().create_future()
 
         async with websockets.serve(self._handle_client, self.host, self.port):
-            await asyncio.Future()  # Run forever
+            await stop  # Run forever
 
-    async def _handle_client(self, websocket, path):
+    async def _handle_client(self, websocket):
         """Handle individual client connection"""
+        logger.info(f"Client connected: {websocket.remote_address}")
         self._clients.add(websocket)
 
-        logger.info(f"Client connected: {websocket.remote_address}")
 
         try:
             async for message in websocket:
@@ -49,13 +54,16 @@ class WebSocketServer:
         """Process incoming WebSocket message"""
         try:
             data = json.loads(message)
-            action = data.get("action")
+            command = data.get("command")
+            
+            # specific commands for the game module
+            game_commands = ["startup", "context", "actions/force", "actions/register", "actions/unregister", "action/result"]
 
-            if action == "get_state":
+            if command == "get_state":
                 state = self.module_manager.get_all_state()
                 await websocket.send(json.dumps({"type": "state", "data": state}))
 
-            elif action == "emit_event":
+            elif command == "emit_event":
                 event = Event(
                     type=data["event_type"],
                     data=data.get("event_data"),
@@ -66,9 +74,9 @@ class WebSocketServer:
 
                 await websocket.send(json.dumps({"type": "ack", "success": True}))
 
-            elif action == "manage_memory":
+            elif command in game_commands:
                 # Handle memory management
-                pass
+                self.game_module.handle_incoming_command(command, data)
 
         except Exception as e:
             logger.error(f"Error processing message: {e}", exc_info=True)

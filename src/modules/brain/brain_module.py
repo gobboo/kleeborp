@@ -1,6 +1,7 @@
 # modules/brain/brain_module.py
 import json
 import logging
+import random
 import time
 from events.handlers import event_handler
 from modules.base import BaseModule
@@ -12,20 +13,27 @@ from utils.user_name_to_name import user_name_to_name
 
 logger = logging.getLogger(__name__)
 
-
 class BrainModule(BaseModule):
     def __init__(self, event_bus, module_manager, config):
         super().__init__("brain", event_bus, config)
 
         self.module_manager = module_manager
         self.llm_client = LLMClient(config["llm"])
-        self.conversation_buffer = []
+        self.tool_results = []
+
         self.pending_tool_calls = []
-        self.pending_conversation_buffer = []
+        self.pending_conversation_buffer = [] # this gets cleared at LLM_COMPLETION
+        self.queued_conversation_buffer = [] # when speaking or generation is happening we store this to appl to the above later
         
+        self.is_forced_generating = False
         self.is_generating = False
+        
         self.generation_task = None
+
         self.last_generation_started_at = time.monotonic() # used
+        self.last_generation_finished_at = time.monotonic()
+
+        self.patience = random.randint(30, 60)
 
         self._is_speaking = False
 
@@ -41,23 +49,21 @@ class BrainModule(BaseModule):
     @event_handler(EventType.TRANSCRIPTION_COMPLETE)
     async def on_user_input(self, event: Event):
         """Handle user input and generate response"""
-        if self.is_generating or self._is_speaking:
-            self.logger.warning("Already generating / speaking, queueing input") # TODO Maybe actually queue transcriptions?
-            return
-
         user_message = event.data["transcription"]
 
         # Lookup "name" from "user_name"
         name = user_name_to_name(event.data["user_name"])
         message = {
             "role": "user",
-            "content": f"[{name}]: {user_message}",
+            "content": f"{name}: {user_message}",
         }
 
-        self.conversation_buffer.append(message)
-        self.pending_conversation_buffer.append(message)
+        if self.is_generating or self._is_speaking:
+            # self.queued_conversation_buffer.append(message)
+            self.logger.warning("Already generating / speaking, queueing input") # TODO Maybe actually queue transcriptions?
+            return
 
-        self.logger.debug(self.conversation_buffer)
+        self.pending_conversation_buffer.append(message)
 
         await self.event_bus.emit(
             Event(
@@ -71,27 +77,29 @@ class BrainModule(BaseModule):
             )
         )
 
-        # TODO: Interruptions, and silence checking
-        self.time_since_last_transcription = time.monotonic()
-
-        if self.generation_task != None:
-            self._cancel_task()
-
-
     @event_handler(EventType.TTS_STARTED)
     async def on_tts_started(self, _):
         self._is_speaking = True
         self.logger.info('tts is currently active')
 
-    @event_handler(EventType.TTS_COMPLETE)
+    @event_handler(EventType.TTS_PLAYER_COMPLETE)
     async def on_tts_complete(self, _):
         self._is_speaking = False
+        self.time_since_last_spoke = time.monotonic()
         self.logger.info('tts is no longer active')
 
     @event_handler(EventType.INTERRUPT)
     async def on_interruption(self, _):
         self._is_speaking = False
+        self.time_since_last_spoke = time.monotonic()
+    
+    async def _force_generate_response(self):
+        self.is_forced_generating = True
+
+        self.logger.info('forcing generation as we havent been able to speak for a while.')
         
+        await self._generate_response()
+
     async def _generate_response(self):
         """Generate streaming response"""
         self.is_generating = True
@@ -107,15 +115,16 @@ class BrainModule(BaseModule):
 
         self.logger.info(messages)
 
-        # self.logger.debug(messages)
+        # self.logger.info(messages)
 
         try:
             assistant_message = {"role": "assistant", "content": ""}
 
-            self.logger.debug(self.conversation_buffer)
+            # self.logger.info(self.tool_results)
 
             async for chunk in self.llm_client.stream_completion(
-                messages=messages, tools=tools
+                messages=messages,
+                tools=tools
             ):
                 if chunk["type"] == "text":
                     # Stream text to TTS
@@ -165,7 +174,7 @@ class BrainModule(BaseModule):
 
                 elif chunk["type"] == "done":
                     # Save assistant message
-                    self.conversation_buffer.append(assistant_message)
+                    # self.conversation_buffer.append(assistant_message)
 
                     # If there were tool calls, wait for results
                     if (
@@ -176,7 +185,17 @@ class BrainModule(BaseModule):
                         # Will continue when all tool results arrive
                     else:
                         # Done generating
-                        self.logger.debug(assistant_message)
+                        self.logger.info(assistant_message)
+
+                        self.patience = random.randint(40, 60)
+                        self.last_generation_finished_at = time.monotonic()
+
+                        self.pending_conversation_buffer.clear()
+
+                        # add what was said when generating or speaking to the current conversational buffer
+                        self.pending_conversation_buffer.extend(self.queued_conversation_buffer)
+                        self.queued_conversation_buffer.clear()
+                        
 
                         await self.event_bus.emit(
                             Event(
@@ -185,15 +204,17 @@ class BrainModule(BaseModule):
                                 source="brain",
                             )
                         )
+                        
+                        self.tool_results.clear()
 
         except asyncio.CancelledError:
             self.logger.info("Generation interrupted")
         except Exception as e:
             self.logger.error(f"Error generating response: {e}", exc_info=True)
         finally:
-            self.logger.debug('finished prompt generation')
-            self.pending_conversation_buffer.clear()
+            self.logger.info('finished prompt generation')
             self.is_generating = False
+            self.is_forced_generating = False
 
     @event_handler(EventType.TOOL_RESULT)
     async def on_tool_result(self, event: Event):
@@ -203,7 +224,7 @@ class BrainModule(BaseModule):
         self.logger.info(tool_result)
 
         # Add tool result to conversation
-        self.conversation_buffer.append(
+        self.tool_results.append(
             {
                 "role": "tool",
                 "tool_call_id": tool_result["id"],
@@ -236,13 +257,14 @@ class BrainModule(BaseModule):
           system_prompt = await self._get_system_prompt()
 
           self.logger.info('got system prompt')
+          
+          messages = map(lambda x: {"role": "user", "content": x["content"]}, self.pending_conversation_buffer)
 
-          content = '\n'.join(message["content"] for message in self.pending_conversation_buffer)
-
-          return [{"role": "system", "content": system_prompt}, {"role": "user", "content": f'This is shared room speech. Most of it is not directed at you.\n{content}'}]
+          return [{"role": "system", "content": system_prompt}, *self.tool_results, *messages]
         except Exception as e:
             self.logger.error(e, exc_info=True)
             raise e
+
     async def _get_system_prompt(self) -> str:
         """Build system prompt from module fragments"""
         # Get from module manager
@@ -252,21 +274,42 @@ class BrainModule(BaseModule):
 
     async def _get_available_tools(self) -> list:
         """Get available tools from MCP or tool registry"""
+        # Check if theres a game currently in progress
+        # if there is we want to send the games registered
+        # tools
+        tool_definitions = []
+
+        games_module = self.module_manager.get_module("game")
+
+        if games_module and games_module.game != None:
+          games_registered_actions = games_module.registered_actions
+
+          tool_definitions.extend(games_registered_actions)
+
         # Query MCP module or tool registry
         tools_module = self.module_manager.get_module("tools")
 
         if tools_module:
-            return tools_module.get_tool_definitions_for_llm()
+            tools = tools_module.get_tool_definitions_for_llm()
 
-        return []
+            tool_definitions.extend(tools)
+
+        return tool_definitions
     
     def _cancel_task(self):
         now = time.monotonic()
 
-        if self.is_generating and now - self.last_generation_started_at >= self.config.get('cancel_grace_period', 2):
-            self.logger.debug('cannot cancel generation task, grace period over.')
+        if self.is_generating and self.is_forced_generating:
+            self.logger.info('cannot cancel generation task, we are being forced to think')
+            return
+        
+        grace_period_elapsed = now - self.last_generation_started_at
+
+        if self.is_generating and grace_period_elapsed >= self.config.get('cancel_grace_period', 1):
+            self.logger.info('cannot cancel generation task, grace period over.')
             return
 
+        # if theres an existing task and its not done, then we're allowed to cancel it
         if self.generation_task and not self.generation_task.done():
             self.generation_task.cancel() # TODO Maybe call interruption?
 
@@ -282,14 +325,24 @@ class BrainModule(BaseModule):
         while self._running:
             await asyncio.sleep(0.1)
 
-            if self.is_generating or self._is_speaking: # TODO Fix this
+            now = time.monotonic()
+
+            # cooldown basically, checks to make sure 2 seconds have passed since last generation
+            if now - self.last_generation_finished_at <= 2:
                 continue
 
-            now = time.monotonic()
+            if self.is_generating or self._is_speaking: # TODO Fix this
+                continue
             
             self.logger.debug(f'silence: {now - self.time_since_last_spoke}')
 
-            if now - self.time_since_last_spoke <= 1.5:
+            if now - self.time_since_last_spoke <= 2:
+                # check to see if our patience has ran out
+                if now - self.last_generation_finished_at >= self.patience:
+                    self.generation_task = asyncio.create_task(
+                        self._force_generate_response()
+                    )
+
                 continue
 
             if len(self.pending_conversation_buffer) <= 0:

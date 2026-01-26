@@ -12,6 +12,7 @@ Rules:
 - Do NOT include transient details or one-off jokes
 - Do NOT speculate beyond the conversation
 - Do NOT output normal text
+- Do NOT create null answers or answers that you dont know.
 
 You MUST return your result as a single tool call to `create_memories`.
 
