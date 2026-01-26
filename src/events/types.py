@@ -52,7 +52,8 @@ class EventType(str, Enum):
     TRANSCRIPTION_COMPLETE = "speech.transcription.complete"
     TTS_REQUEST = "tts.request"
     TTS_AUDIO_CHUNK = "tts.audio.chunk"
-    TTS_COMPLETE = "tts.complete"
+    TTS_PLAYER_COMPLETE = "tts.player.complete"
+    TTS_EXHAUSTED = "tts.exhausted"
     TTS_STARTED = "tts.started"
 
     # === Audio Playback Events ===

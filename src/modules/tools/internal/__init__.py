@@ -6,7 +6,7 @@ from .discord.messaging import DiscordMessagingTools
 
 # Export all tool classes
 TOOL_CLASSES = [
-    DiscordMessagingTools,
+    # DiscordMessagingTools,
     # DiscordVoiceTools,
     # MemoryTools,
     # SystemStatusTool,

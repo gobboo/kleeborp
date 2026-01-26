@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class LLMClient:
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], model_override: str = None):
         self.config = config
 
         # Works for both OpenAI and OpenRouter
@@ -17,7 +17,7 @@ class LLMClient:
             base_url=config.get("base_url"),  # None for OpenAI, set for OpenRouter
         )
 
-        self.model = config.get("model", "gpt-4-turbo-preview")
+        self.model = model_override or config.get("model", "gpt-4-turbo-preview")
         print(self.model)
 
     async def stream_completion(
@@ -32,16 +32,21 @@ class LLMClient:
                 'content': str (for text),
                 'tool_call': {...} (for tool_call),
                 'finish_reason': str (for done)
-            }
+					}
         """
         try:
             stream = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 tools=tools,
-                tool_choice=tool_choice if tools else None,
+                tool_choice=tool_choice if tools else "none",
                 stream=True,
                 stream_options={"include_usage": True},
+                top_p=self.config.get('top_p', 0.8),
+                temperature=self.config.get('tempurate', 0.75),
+                max_tokens=self.config.get('max_tokens', 300),
+                frequency_penalty=self.config.get('frequency_penalty', 0.8),
+                presence_penalty=self.config.get('presence_penalty', 0.3)
             )
 
             # Track tool calls being built

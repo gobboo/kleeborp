@@ -11,6 +11,8 @@ from modules.discord.bot import KleeborgBot
 from events import Event, EventType
 from discord.ext import voice_recv
 
+from utils.pcm_audio import StreamingPCMSource
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,11 +34,20 @@ class VoiceManager:
         # each users audio input
         self.audio_inputs: Dict[int, UserAudioInput] = {}
 
+        self.voice_source = None
+
+        self.event_bus.subscribe(EventType.TTS_STARTED, self._on_tts_started)
+        self.event_bus.subscribe(EventType.TTS_AUDIO_CHUNK, self._on_tts_chunk)
+        self.event_bus.subscribe(EventType.TTS_EXHAUSTED, self._on_tts_exhaused)
+
     def _setup_voice_receiver(self):
         """Setup voice receiver to capture audio from users"""
 
         def audio_callback(user, data: voice_recv.VoiceData):
             """Called when Discord receives audio"""
+            if not user:
+                 return
+
             if user.id in self.audio_inputs:
                 # Queue audio to the user's input handler
                 self.audio_inputs[user.id].queue_audio(data.pcm)
@@ -70,6 +81,13 @@ class VoiceManager:
 
         logger.info(f"Stopped audio input for user {user_id}")
 
+    async def _create_all_audio_inputs(self, channel = None):
+        channel = channel or self.get_current_channel()
+
+        for member in channel.members:
+            if not member.bot:  # Don't track bots
+                await self._add_user_audio_input(member.id, member.name)
+
     async def _cleanup_all_audio_inputs(self):
         """Stop all audio input handlers"""
         logger.info("Cleaning up all audio inputs")
@@ -84,6 +102,15 @@ class VoiceManager:
         Handle voice state changes.
         Called by discord_module when Discord.py fires the event.
         """
+        # If we moved channel, remove all our previous audio inputs and create new ones
+        if self.get_current_channel() == after.channel and member.bot:
+            logger.info('kleeb moved channels, updating all user inputs')
+            await self._cleanup_all_audio_inputs()
+
+            await self._create_all_audio_inputs(channel=after.channel)
+
+            self._setup_voice_receiver()
+
         # User joined our channel
         if after.channel == self.get_current_channel() and not member.bot:
             if before.channel != after.channel:
@@ -128,9 +155,8 @@ class VoiceManager:
 
                 # Create audio inputs for existing users in channel
                 channel = self.get_current_channel()
-                for member in channel.members:
-                    if not member.bot:  # Don't track bots
-                        await self._add_user_audio_input(member.id, member.name)
+                
+                await self._create_all_audio_inputs()
 
                 # Emit event
                 await self.event_bus.emit(
@@ -285,3 +311,46 @@ class VoiceManager:
                 "users": [{"id": u.id, "name": u.name, "bot": u.bot} for u in users],
             },
         }
+
+
+    async def _on_tts_started(self, _):
+        if self.voice_source:
+            self._on_tts_finished(_)
+
+        self.voice_source = StreamingPCMSource()
+
+        if self.voice_client.is_playing():
+            self.voice_client.stop()
+
+        loop = asyncio.get_event_loop()
+
+        def after_playback(_):
+          loop.call_soon_threadsafe(
+              asyncio.create_task,
+              self._on_playback_finished()
+          )
+
+        self.voice_client.play(self.voice_source, after=after_playback)
+
+    async def _on_tts_chunk(self, event: Event):
+        if self.voice_source:
+            self.voice_source.write(event.data["audio"])
+
+    def _on_tts_finished(self):
+        if not self.voice_source:
+            return
+        
+        self.voice_source.close()
+        self.voice_source = None
+
+    async def _on_tts_exhaused(self, _):
+        if not self.voice_source:
+            return
+        
+        self.voice_source.close()
+
+    async def _on_playback_finished(self):
+        logger.info('successfully played tts fully.')
+        self._on_tts_finished()
+
+        await self.event_bus.emit(Event(EventType.TTS_PLAYER_COMPLETE))

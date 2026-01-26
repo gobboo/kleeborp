@@ -44,6 +44,7 @@ class ModuleManager:
         fragments = []
 
         for module in self._modules.values():
+            logger.info(f'fetching prompt from module {module.name}')
             fragment = await module.get_prompt_fragment()
 
             if fragment:
