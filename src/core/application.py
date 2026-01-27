@@ -38,10 +38,12 @@ class Application:
         """Instantiate and register all modules"""
 
         # register the rest as they dont depend on anything above
+        brain_module = BrainModule(self.event_bus, self.module_manager, self.config.raw)
+        self.module_manager.register(brain_module)
+        
         modules = [
             PersonaModule(self.event_bus, self.module_manager),
             MemoryModule(self.event_bus, self.module_manager, self.config.raw),
-            BrainModule(self.event_bus, self.module_manager, self.config.raw),
             WhisperModule(
                 self.event_bus,
                 self.module_manager,
@@ -50,8 +52,9 @@ class Application:
             TTSModule(
                 self.event_bus, self.module_manager, self.config.get("modules.tts", {})
             ),
-            GameModule(self.event_bus, self.module_manager, self.config.get("modules.games"))
+            GameModule(self.event_bus, self.module_manager, self.websocket_server, self.config.get("modules.games"))
         ]
+        
         
         for module in modules:
             self.module_manager.register(module)
@@ -65,9 +68,10 @@ class Application:
         tools_module = ToolsModule(
             event_bus=self.event_bus,
             module_manager=self.module_manager,
-            config=self.config,
+            config=self.config.raw,
             discord_module=discord_module,
             voice_manager=discord_module.voice_manager,
+            brain_module=brain_module
         )
 
         self.module_manager.register(tools_module)

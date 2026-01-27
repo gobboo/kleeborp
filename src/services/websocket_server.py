@@ -76,7 +76,7 @@ class WebSocketServer:
 
             elif command in game_commands:
                 # Handle memory management
-                self.game_module.handle_incoming_command(command, data)
+                await self.game_module.handle_incoming_command(command, data)
 
         except Exception as e:
             logger.error(f"Error processing message: {e}", exc_info=True)

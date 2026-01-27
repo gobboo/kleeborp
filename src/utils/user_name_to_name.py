@@ -1,4 +1,4 @@
-USER_NAME_TO_NAME_MAP = {"Sam": "fuqyou", "Lewis": "homicides.", "Gobbo": "gobboo", "Nathan": "quantix.dev", "Sam": "frenfrog_", "Tom": "tomass__", "Cam": "camisasleep", "Wayne": "lookathimtremble", "Jake": "jake7917", "Mia": ".lovi.", "Lukasz": "xmistyxo"}
+USER_NAME_TO_NAME_MAP = {"Nico": "n1co00o", "Sam": "fuqyou", "Lewis": "homicides.", "Gobbo": "gobboo", "Nathan": "quantix.dev", "Sam": "frenfrog_", "Tom": "tomass__", "Cam": "camisasleep", "Wayne": "lookathimtremble", "Jake": "jake7917", "Mia": ".lovi.", "Lukasz": "xmistyxo", "Jack": "plunge.", "Joel": "anthonyfuller", "Adam": "1higuy"}
 
 
 def user_name_to_name(user_name: str):

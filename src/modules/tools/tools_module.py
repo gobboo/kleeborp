@@ -35,7 +35,7 @@ class ToolsModule(BaseModule):
         """Auto-register all internal tools"""
         # Instantiate all tool classes
         for ToolClass in TOOL_CLASSES:
-            tool_instance = ToolClass(**self.module_dependencies)
+            tool_instance = ToolClass(config=self.config, **self.module_dependencies)
             self.tool_instances.append(tool_instance)
 
             # Register all tools from this instance
@@ -96,7 +96,10 @@ class ToolsModule(BaseModule):
             if self.tool_registry.is_internal_tool(tool_name):
                 # Internal tool
                 tool_def = self.tool_registry.get_tool(tool_name)
-                result = await tool_def.handler(**arguments)
+                if arguments != None:
+                    result = await tool_def.handler(**arguments)
+                else:
+                    result = await tool_def.handler()
 
             elif self.tool_registry.is_mcp_tool(tool_name):
                 # MCP tool
@@ -109,7 +112,9 @@ class ToolsModule(BaseModule):
 
                 result = self.normalize_mcp_content(result)
             else:
-                raise ValueError(f"Unknown tool: {tool_name}")
+                self.logger.warning(f"attempted to use unknown tool: {tool_name}")
+                # raise ValueError(f"Unknown tool: {tool_name}")
+                return
             
             # Transform the results
 
