@@ -83,6 +83,9 @@ class VoiceManager:
 
     async def _create_all_audio_inputs(self, channel = None):
         channel = channel or self.get_current_channel()
+        
+        if channel is None:
+            return
 
         for member in channel.members:
             if not member.bot:  # Don't track bots

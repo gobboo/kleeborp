@@ -20,12 +20,13 @@ class BaseTool:
     Subclasses define tools and auto-register them.
     """
 
-    def __init__(self, **dependencies):
+    def __init__(self, config: dict, **dependencies):
         """
         Args:
             **dependencies: Module references (discord_module, memory_module, etc.)
         """
         self.dependencies = dependencies
+        self.config = config
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def get_tools(self) -> List[ToolDefinition]:

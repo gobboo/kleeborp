@@ -45,16 +45,17 @@ class MemoryModule(BaseModule):
 
         self.to_commit_messages.clear()
 
-        self.previous_conversations.append(f'Kleeborp: {event.data['message']}')
+        self.previous_conversations.append(f'assistant: {event.data['message']}')
 
     async def get_prompt_fragment(self):
         prompt = "Previous conversation history DO NOT OUTPUT THIS:\n"
 
-        conversation = '\n'.join(self.previous_conversations[-50:])
+        # conversation = '\n'.join(self.previous_conversations[-50:])
 
         memories = "\n".join(self.current_relevant_memories)
 
-        return f"{prompt}{conversation}\n\nRelevant Memories:\n{memories}"
+        # return f"{prompt}{conversation}\n\nRelevant Memories:\n{memories}"
+        return f"Relevant Memories to current conversation:\n{memories}"
 
     async def _run(self):
         try:

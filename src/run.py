@@ -6,7 +6,7 @@ from utils.logger import setup_logging
 
 
 async def main():
-    setup_logging(level="DEBUG")
+    setup_logging(level="INFO")
 
     config = Config("config.toml")
     app = Application(config)
