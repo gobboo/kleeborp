@@ -1,0 +1,47 @@
+name: Feature request
+description: Suggest an idea for this project
+title: "feature: "
+labels: "✨ enhancement"
+
+body:
+  - type: input
+    id: modules
+    attributes:
+      label: Modules
+      description: What module(s) does this impact?
+      placeholder: ex. brain_module, games_module, ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reason
+    attributes:
+      label: Describe the reason for change or addition
+      description: |
+        A clear and concise description of why a change needs to be made or a feature should be created.
+        E.x. Helps Agnes understand previous context of conversation
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Describe the solution
+      description: A clear and concise description of what you want to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add any other context or screenshots about the feature request here.
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our [Code of Conduct](./.github/CODE_OF_CONDUCT.md)
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true
