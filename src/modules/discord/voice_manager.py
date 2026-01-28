@@ -339,7 +339,7 @@ class VoiceManager:
         if self.voice_source:
             self.voice_source.write(event.data["audio"])
 
-    def _on_tts_finished(self):
+    def _on_tts_finished(self, _):
         if not self.voice_source:
             return
         
