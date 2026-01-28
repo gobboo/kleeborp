@@ -1,9 +1,12 @@
 [llm]
-api_key = "sk-..."
-base_url = "https://openrouter.ai/api/v1"
-model = "deepseek/deepseek-v3.2"
-temperature = 0.7
-max_tokens = 4096
+api_key = "API_KEY"
+base_url = "https://api.groq.com/openai/v1"
+model = "llama-3.3-70b-versatile"
+temperature = 0.9
+frequency_penalty=0.8
+presence_penalty=0.3
+top_p=0.8
+max_tokens = 300
 
 [llm.timeouts]
 connect = 10
@@ -11,35 +14,45 @@ read = 60
 
 [modules.brain]
 enabled = true
-interrupt_window = 5.0
+cancel_grace_period = 2
 
 [modules.memory]
 enabled = true
 rag_enabled = true
-memory_interval = 40
+memory_interval = 40 # how many messages until we create new memories from said messages
+minimum_distance = 0.7 # essentially how "rag" scores, the higher the more relevant
+chroma_path = 'memory/memories.db'
+base_url = 'https://openrouter.ai/api/v1'
+api_key = ""
+model = 'deepseek/deepseek-v3.2'
 
 [modules.discord]
 enabled = true
-token = "your-bot-token"
+token = "DISCORD_BOT_TOKEN"
+default_voice_channel = 787705914966802482 # joins this channel by default
 auto_join = true
 
 [modules.tts]
+speech_key = ""
+speech_endpoint = "https://YOUR_RESOURCE.cognitiveservices.azure.com/"  # or your region
+voice = "en-US-AshleyNeural"  # or any Azure voice
+
+[modules.whisper]
 enabled = true
-provider = "elevenlabs"
-voice_id = "21m00Tcm4TlvDq8ikWAM"
+model = 'distil-large-v3'
+num_workers = 5
 
 [websocket]
 host = "localhost"
-port = 8765
+port = 8000
 
-[mcp.servers.filesystem]
-command = "npx"
-args = ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed"]
+[tools.vision]
+model = 'meta-llama/llama-4-scout-17b-16e-instruct'
 
 [mcp.servers.brave_search]
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-brave-search"]
-env = { BRAVE_API_KEY = "your-key" }
+env = { BRAVE_API_KEY = "" }
 
 [logging]
 level = "INFO"
