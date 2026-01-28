@@ -318,7 +318,7 @@ class VoiceManager:
 
     async def _on_tts_started(self, _):
         if self.voice_source:
-            self._on_tts_finished(_)
+            self._on_tts_finished()
 
         self.voice_source = StreamingPCMSource()
 
@@ -339,7 +339,7 @@ class VoiceManager:
         if self.voice_source:
             self.voice_source.write(event.data["audio"])
 
-    def _on_tts_finished(self, _):
+    def _on_tts_finished(self):
         if not self.voice_source:
             return
         
