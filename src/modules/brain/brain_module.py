@@ -24,7 +24,7 @@ class BrainModule(BaseModule):
         self.last_tools_used = [] # used to try and prevent loops, if a new tool was requested whilst we're giving back previous tool data, and its in here, we discard the new tool request
         self.pending_tool_calls = []
         self.pending_conversation_buffer = [] # this gets cleared at LLM_COMPLETION
-        self.queued_conversation_buffer = [] # when speaking or generation is happening we store this to appl to the above later
+        self.queued_conversation_buffer = [] # when speaking or generation is happening we store this to apply to the above later
         
         self.is_forced_generating = False
         self.is_generating = False
@@ -60,7 +60,7 @@ class BrainModule(BaseModule):
         }
 
         if self.is_generating or self._is_speaking:
-            # self.queued_conversation_buffer.append(message)
+            self.queued_conversation_buffer.append(message)
             self.logger.warning("Already generating / speaking, queueing input") # TODO Maybe actually queue transcriptions?
             return
 
