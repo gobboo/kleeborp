@@ -11,8 +11,11 @@ async def main():
     config = Config("config.toml")
     app = Application(config)
 
-    await app.start()
-
+    try:
+        await app.start()
+    finally:
+        # 🔥 This ALWAYS runs, even on Ctrl+C
+        await app.shutdown()
 
 if __name__ == "__main__":
     asyncio.run(main())
