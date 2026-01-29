@@ -68,10 +68,9 @@ class SFXTool(BaseTool):
         self.is_playing.release()
         pass
     
-    # 
     @tool(
         name="play_sound_effect",
-        description="Plays a specific sound effect based on the name(s) provided",
+        description="Play a specific sound effect by name when asked, pranking or when its funny to do so, not to be spammed.",
         parameters=SCHEMA,
     )
     async def play_sfx(self, sound_name: str, count: int = 1):

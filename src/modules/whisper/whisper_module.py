@@ -131,6 +131,7 @@ class WhisperModule(BaseModule):
 
         segments, _ = self._model.transcribe(
             audio,
+            temperature=0,
             language="en",
             vad_filter=True,  # you already did VAD
             beam_size=5,
