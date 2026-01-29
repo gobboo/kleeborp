@@ -24,17 +24,23 @@ class WebSocketServer:
         self.host = host
         self.port = port
         self._clients: Set[websockets.WebSocketServerProtocol] = set()
+
+        self.stop = None
         
         self.game_module: GameModule | None = None
 
     async def start(self):
-        """Start WebSocket server"""
         logger.info(f"Starting WebSocket server on {self.host}:{self.port}")
         self.game_module = self.module_manager.get_module('game')
-        stop = asyncio.get_running_loop().create_future()
+        self.stop = asyncio.get_running_loop().create_future()
 
-        async with websockets.serve(self._handle_client, self.host, self.port):
-            await stop  # Run forever
+        self._server = await websockets.serve(
+            self._handle_client,
+            self.host,
+            self.port,
+        )
+
+        await self.stop# Run forever
 
     async def _handle_client(self, websocket):
         """Handle individual client connection"""
@@ -59,24 +65,32 @@ class WebSocketServer:
             # specific commands for the game module
             game_commands = ["startup", "context", "actions/force", "actions/register", "actions/unregister", "action/result"]
 
-            if command == "get_state":
-                state = self.module_manager.get_all_state()
-                await websocket.send(json.dumps({"type": "state", "data": state}))
+            match command:
+                  case "ping":
+                      await websocket.send(json.dumps({"type": "ack", "success": True}))
 
-            elif command == "emit_event":
-                event = Event(
-                    type=data["event_type"],
-                    data=data.get("event_data"),
-                    source="websocket",
-                )
+                  case "get_state":
+                      state = self.module_manager.get_all_state()
+                      await websocket.send(json.dumps({"type": "state", "data": state}))
 
-                await self.event_bus.emit(event)
+                  case "emit_event":
+                      event = Event(
+                          type=data["event_type"],
+                          data=data.get("event_data"),
+                          source="websocket",
+                      )
 
-                await websocket.send(json.dumps({"type": "ack", "success": True}))
+                      await self.event_bus.emit(event)
 
-            elif command in game_commands:
-                # Handle memory management
-                await self.game_module.handle_incoming_command(command, data)
+                      await websocket.send(json.dumps({"type": "ack", "success": True}))
+
+                  case _:
+                      if command in game_commands:
+                          # Handle memory management
+                          await self.game_module.handle_incoming_command(command, data)
+                      else:
+                          logger.warning(f'unknown incoming command from websocket {command}')
+
 
         except Exception as e:
             logger.error(f"Error processing message: {e}", exc_info=True)
@@ -89,3 +103,25 @@ class WebSocketServer:
                 *[client.send(json.dumps(message)) for client in self._clients],
                 return_exceptions=True,
             )
+
+    async def shutdown(self):
+        logger.info("Shutting down WebSocket server")
+
+        # Stop main wait
+        if self.stop and not self.stop.done():
+            self.stop.set_result(None)
+
+        # Close all active clients (THIS IS CRITICAL)
+        if self._clients:
+            await asyncio.gather(
+                *[
+                    client.close(code=1001, reason="Server shutdown")
+                    for client in list(self._clients)
+                ],
+                return_exceptions=True,
+            )
+
+        # Close the server itself
+        if self._server:
+            self._server.close()
+            await self._server.wait_closed()

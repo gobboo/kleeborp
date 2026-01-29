@@ -49,9 +49,9 @@ class Application:
                 self.module_manager,
                 self.config.get("modules.whisper", {}),
             ),
-            TTSModule(
-                self.event_bus, self.module_manager, self.config.get("modules.tts", {})
-            ),
+            # TTSModule(
+            #     self.event_bus, self.module_manager, self.config.get("modules.tts", {})
+            # ),
             GameModule(self.event_bus, self.module_manager, self.websocket_server, self.config.get("modules.games"))
         ]
         
@@ -120,9 +120,6 @@ class Application:
 
     async def shutdown(self):
         """Graceful shutdown"""
-        if self._shutdown_event.is_set():
-            return  # Already shutting down
-
         logger.info("Shutting down Kleeborp")
         self._shutdown_event.set()
 
@@ -130,6 +127,9 @@ class Application:
 
         # Stop all modules
         await self.module_manager.stop_all()
+        
+        # Disconnect all websocket clients
+        await self.websocket_server.shutdown()
 
         # Cancel all tasks
         for task in self._tasks:
