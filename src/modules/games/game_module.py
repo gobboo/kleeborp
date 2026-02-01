@@ -70,7 +70,7 @@ class GameModule(BaseModule):
         self.logger.info(f'we got context "{message}" - silent: {silent}')
 
     def on_action_register(self, actions):
-        self.logger.info(f'we got register actions "{actions}"')
+        # self.logger.info(f'we got register actions "{actions}"')
 
         for action in actions:
             # check for duplicates
@@ -92,11 +92,10 @@ class GameModule(BaseModule):
             }
 
             self.registered_actions.append(tool)
-        pass
 
     def on_action_unregister(self, action_ids):
         self.registered_actions = list(filter(lambda x: x["function"]["name"] not in action_ids, self.registered_actions))
-        self.logger.info(f'unregister actions: "{action_ids}"')
+        # self.logger.info(f'unregister actions: "{action_ids}"')
 
     async def on_action_force(self, data):
         message = self._convert_forced_action_to_message(data)

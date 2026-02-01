@@ -51,6 +51,7 @@ class EventType(str, Enum):
     TRANSCRIPTION_REQUEST = "speech.transcription.request"
     TRANSCRIPTION_COMPLETE = "speech.transcription.complete"
     TTS_REQUEST = "tts.request"
+    TTS_CANCELLED = "tts.cancelled"
     TTS_AUDIO_CHUNK = "tts.audio.chunk"
     TTS_PLAYER_COMPLETE = "tts.player.complete"
     TTS_EXHAUSTED = "tts.exhausted"

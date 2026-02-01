@@ -12,4 +12,8 @@ onUnmounted(async () => {
 });
 </script>
 
-<template></template>
+<template>
+	<pre>
+		{{ ws.data }}
+	</pre>
+</template>
