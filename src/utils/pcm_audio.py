@@ -6,29 +6,39 @@ FRAME_SIZE = 3840  # 20ms of 48kHz stereo s16le
 
 class StreamingPCMSource(discord.AudioSource):
     def __init__(self):
-        self.buffer = queue.Queue()
+        self.queue = queue.Queue()
+        self.eof = False
         self.closed = False
 
-    def write(self, data: bytes):
+    def write(self, pcm: bytes):
         if not self.closed:
-          self.buffer.put(data)
+            self.queue.put(pcm)
+
+    def mark_eof(self):
+        self.eof = True
 
     def close(self):
         self.closed = True
 
+    def reset(self):
+        while not self.queue.empty():
+            self.queue.get_nowait()
+
+        self.eof = False
+        self.closed = False
+
     def read(self) -> bytes:
-        # END CONDITION: no more data will ever arrive
-        if self.closed and self.buffer.empty():
-            return b""  # <-- THIS is what Discord waits for
+        if self.closed:
+            return b""
 
         try:
-            return self.buffer.get(timeout=0.02)
+            return self.queue.get_nowait()
         except queue.Empty:
-            # Stream still open but no data yet → return silence
-            return b"\x00" * FRAME_SIZE
+            print("queue is empty: eof: ", self.eof)
+            if self.eof:
+                return b""  # triggers discord after-callback
 
-    def is_opus(self):
-        return False
+            return b"\x00" * 3840  # silence while waiting
 
 
 

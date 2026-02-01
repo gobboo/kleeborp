@@ -35,10 +35,12 @@ class VoiceManager:
         self.audio_inputs: Dict[int, UserAudioInput] = {}
 
         self.voice_source = None
+        self.current_tts_generation: int | None = None
 
         self.event_bus.subscribe(EventType.TTS_STARTED, self._on_tts_started)
         self.event_bus.subscribe(EventType.TTS_AUDIO_CHUNK, self._on_tts_chunk)
-        self.event_bus.subscribe(EventType.TTS_EXHAUSTED, self._on_tts_exhaused)
+        self.event_bus.subscribe(EventType.TTS_EXHAUSTED, self._on_tts_exhausted)
+        self.event_bus.subscribe(EventType.TTS_CANCELLED, self._on_tts_cancelled)
 
     def _setup_voice_receiver(self):
         """Setup voice receiver to capture audio from users"""
@@ -314,46 +316,66 @@ class VoiceManager:
                 "users": [{"id": u.id, "name": u.name, "bot": u.bot} for u in users],
             },
         }
+    
 
-
-    async def _on_tts_started(self, _):
-        if self.voice_source:
-            self._on_tts_finished()
-
-        self.voice_source = StreamingPCMSource()
-
-        if self.voice_client.is_playing():
-            self.voice_client.stop()
+    async def _start_playback_if_needed(self):
+        if self.voice_source is None:
+            self.voice_source = StreamingPCMSource()
 
         loop = asyncio.get_event_loop()
-
         def after_playback(_):
           loop.call_soon_threadsafe(
               asyncio.create_task,
               self._on_playback_finished()
           )
 
-        self.voice_client.play(self.voice_source, after=after_playback)
+        if not self.voice_client.is_playing():
+            self.voice_client.play(self.voice_source, after=after_playback)
+
+    
+
+    async def _on_tts_cancelled(self, event):
+        logger.info("TTS cancelled (gen=%d)", event.data["generation_id"])
+        self.voice_source.reset()
+
+
+    async def _on_tts_started(self, event):
+        gen = event.data["generation_id"]
+        logger.info("TTS started (gen=%d)", gen)
+
+        self.current_tts_generation = gen
+
+        await self._start_playback_if_needed()
+        self.voice_source.reset()
+
 
     async def _on_tts_chunk(self, event: Event):
-        if self.voice_source:
-            self.voice_source.write(event.data["audio"])
+        gen = event.data["generation_id"]
 
-    def _on_tts_finished(self):
+        if gen != self.current_tts_generation:
+            logger.debug(
+                "Dropping stale TTS chunk (gen=%d, current=%s)",
+                gen,
+                self.current_tts_generation,
+            )
+            return
+
         if not self.voice_source:
             return
-        
-        self.voice_source.close()
-        self.voice_source = None
 
-    async def _on_tts_exhaused(self, _):
-        if not self.voice_source:
-            return
-        
-        self.voice_source.close()
+        audio = event.data["audio"]
+        self.voice_source.write(audio)
+
+    async def _on_tts_exhausted(self, event):
+        logger.info("TTS exhausted (gen=%d)", event.data["generation_id"])
+        # DO NOT close here
+        self.voice_source.mark_eof()
 
     async def _on_playback_finished(self):
-        logger.info('successfully played tts fully.')
-        self._on_tts_finished()
+        logger.info("Playback fully completed")
+
+        self.voice_source.close()
+        self.voice_source = None
+        self.current_tts_generation = None
 
         await self.event_bus.emit(Event(EventType.TTS_PLAYER_COMPLETE))

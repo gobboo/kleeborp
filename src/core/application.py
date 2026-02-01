@@ -6,6 +6,7 @@ import sys
 from core.config import Config
 from core.event_bus import EventBus
 from core.module_manager import ModuleManager
+
 from modules.brain.brain_module import BrainModule
 from modules.discord.discord_module import DiscordModule
 from modules.games.game_module import GameModule
@@ -49,9 +50,9 @@ class Application:
                 self.module_manager,
                 self.config.get("modules.whisper", {}),
             ),
-            # TTSModule(
-            #     self.event_bus, self.module_manager, self.config.get("modules.tts", {})
-            # ),
+            TTSModule(
+                self.event_bus, self.module_manager, self.config.get("modules.tts", {})
+            ),
             GameModule(self.event_bus, self.module_manager, self.websocket_server, self.config.get("modules.games"))
         ]
         

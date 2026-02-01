@@ -119,14 +119,12 @@ class BrainModule(BaseModule):
         # Build messages with system prompt
         messages = await self._build_messages()
 
-        self.logger.info(messages)
-
         # self.logger.info(messages)
+
+        self.logger.info(tools)
 
         try:
             assistant_message = {"role": "assistant", "content": ""}
-
-            # self.logger.info(self.tool_results)
 
             async for chunk in self.llm_client.stream_completion(
                 messages=messages,
@@ -376,7 +374,7 @@ class BrainModule(BaseModule):
             if self.is_generating or self._is_speaking or len(self.pending_tool_calls) > 0:
                 continue
             
-            self.logger.debug(f'silence: {now - self.time_since_last_spoke}')
+            # self.logger.debug(f'silence: {now - self.time_since_last_spoke}')
 
             if now - self.time_since_last_spoke <= 2:
                 # check to see if our patience has ran out

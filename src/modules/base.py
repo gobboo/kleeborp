@@ -117,4 +117,4 @@ class BaseModule(ABC):
 
     def get_state(self) -> Dict[str, Any]:
         """Return current module state for external inspection"""
-        return {"name": self.name, "running": self._running}
+        return {"name": self.name, "running": self._running, "state": str(vars(self))}

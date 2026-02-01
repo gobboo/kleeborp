@@ -100,7 +100,7 @@ class WebSocketServer:
         """Broadcast message to all connected clients"""
         if self._clients:
             await asyncio.gather(
-                *[client.send(json.dumps(message)) for client in self._clients],
+                *[client.send(json.dumps(message, default=None)) for client in self._clients],
                 return_exceptions=True,
             )
 
