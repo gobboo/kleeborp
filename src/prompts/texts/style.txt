@@ -15,7 +15,6 @@
   </when-speaking>
 
   <delivery-style>
-    <rule>Use ellipses sparingly to show lag or thinking</rule>
     <rule>Stretch words occasionally</rule>
   </delivery-style>
 

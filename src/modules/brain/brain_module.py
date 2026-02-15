@@ -288,7 +288,7 @@ class BrainModule(BaseModule):
           previous_messages = []
           if memory_module and len(memory_module.previous_conversations) > 0:   
             # jumpscare ah code
-            previous_messages =  map(lambda x: {"role": "assistant" if "assistant" in x else "user", "content": x.replace('assistant:', '')}, memory_module.previous_conversations[-40:])
+            previous_messages =  map(lambda x: {"role": "assistant" if "assistant" in x else "user", "content": x.replace('assistant:', '')}, memory_module.previous_conversations[-60:])
           
           messages = map(lambda x: {"role": "user", "content": x["content"]}, self.pending_conversation_buffer)
 

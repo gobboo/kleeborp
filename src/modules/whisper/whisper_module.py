@@ -131,15 +131,14 @@ class WhisperModule(BaseModule):
 
         segments, _ = self._model.transcribe(
             audio,
-            temperature=0,
             language="en",
             vad_filter=True,  # you already did VAD
             beam_size=5,
-            condition_on_previous_text=False,
-            initial_prompt=(
-                "The following conversation mentions a character named Kleeborp. "
-                "Kleeborp is spelled K-L-E-E-B-O-R-P."
-            ),
+            # condition_on_previous_text=False,
+            # initial_prompt=(
+            #     "The following conversation mentions a character named Kleeborp. "
+            #     "Kleeborp is spelled K-L-E-E-B-O-R-P."
+            # ),
         )
 
         self.logger.info(f"audio transcribed {segments}")

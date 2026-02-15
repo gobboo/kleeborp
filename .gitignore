@@ -215,6 +215,14 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# sqlite3
+*.sqlite3
+*.sqlite
+
 config.toml
-memory/
+memory/memories.db
 debug_audio/
+
+# file types
+*.mp3
+*.jpg
