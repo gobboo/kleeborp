@@ -83,12 +83,12 @@ class MemoryModule(BaseModule):
 
     # TODO Make it so it uses the MCP server to insert memories
     async def _create_memories_from_conversation(self):
-        messages = copy.deepcopy(self.previous_conversations[-20:])
+        messages = copy.deepcopy(self.previous_conversations[-40:])
 
         if not messages:
             return
         
-        self.logger.info('creating memories from previous 20 messages')
+        self.logger.info('creating memories from previous 40 messages')
 
         system_prompt = await asyncio.to_thread(load_prompt, "memory")
 
@@ -99,7 +99,7 @@ class MemoryModule(BaseModule):
                 {"role": "system", "content": system_prompt},
                 *(
                     {"role": "user", "content": content}
-                    for content in self.previous_conversations[-20:]
+                    for content in self.previous_conversations[-40:]
                 ),
             ],
         tools = [{
