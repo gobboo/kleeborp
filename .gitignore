@@ -216,8 +216,8 @@ __marimo__/
 .streamlit/secrets.toml
 
 # sqlite3
-*.sqlite3
-*.sqlite
+.sqlite3
+.sqlite
 
 config.toml
 memory/memories.db
