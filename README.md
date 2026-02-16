@@ -8,14 +8,14 @@ This project is designed to be highly extensible: features are implemented as in
 
 ## Features
 
-* 🧠 **LLM Brain** – Central reasoning loop backed by configurable LLM providers
-* 💾 **Memory + RAG** – Persistent vector memory using ChromaDB
-* 🎙 **Discord Voice Bot** – Auto-join voice channels, receive audio, and respond
-* 🗣 **Whisper STT** – Real-time speech-to-text with worker pooling
-* 🔊 **TTS** – Azure / ElevenLabs via `realtimetts`
-* 🌐 **WebSocket API** – External clients can interact in real time
-* 🧩 **MCP Tooling** – External tools (e.g. Brave Search) via Model Context Protocol
-* 🧱 **Modular Architecture** – Clean separation of core, services, modules, and events
+* **LLM Brain** – Central reasoning loop backed by configurable LLM providers
+* **Memory + RAG** – Persistent vector memory using ChromaDB
+* **Discord Voice Bot** – Auto-join voice channels, receive audio, and respond
+* **Whisper STT** – Real-time speech-to-text with worker pooling
+* **TTS** – Azure / ElevenLabs via `realtimetts`
+* **WebSocket API** – External clients can interact in real time
+* **MCP Tooling** – External tools (e.g. Brave Search) via Model Context Protocol
+* **Modular Architecture** – Clean separation of core, services, modules, and events
 
 ---
 
