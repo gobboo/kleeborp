@@ -14,6 +14,7 @@ This project is designed to be highly extensible: features are implemented as mo
 * **Whisper STT** – Real-time speech-to-text with worker pooling
 * **TTS** – Azure TTS
 * **WebSocket API** – External tools and clients can interact in real time
+* **Games Integration** - Ability to play games via the [Neuro-sama SDK](https://github.com/VedalAI/neuro-sdk)
 * **MCP Tooling** – External tools (e.g. Brave Search) via Model Context Protocol
 * **Modular Architecture** – Clean separation of core, services, modules, and events
 
