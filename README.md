@@ -1,19 +1,19 @@
-# kleeborp-ai
+# to-be-named AI 
 
 A modular, event-driven AI application with Discord voice support, memory (RAG), speech-to-text, text-to-speech, websocket APIs, and tool integrations via MCP. Built with **Python 3.12+** and managed using **uv**.
 
-This project is designed to be highly extensible: features are implemented as independent modules that can be enabled or disabled via configuration.
+This project is designed to be highly extensible: features are implemented as modules, able to communicate between using event-driven architecture.
 
 ---
 
 ## Features
 
 * **LLM Brain** – Central reasoning loop backed by configurable LLM providers
-* **Memory + RAG** – Persistent vector memory using ChromaDB
-* **Discord Voice Bot** – Auto-join voice channels, receive audio, and respond
+* **Memory + RAG** – Persistent vector memory using ChromaDB & an LLM
+* **Discord Voice Bot** – Join voice channels, receive audio, know whos-who and respond
 * **Whisper STT** – Real-time speech-to-text with worker pooling
-* **TTS** – Azure / ElevenLabs via `realtimetts`
-* **WebSocket API** – External clients can interact in real time
+* **TTS** – Azure TTS
+* **WebSocket API** – External tools and clients can interact in real time
 * **MCP Tooling** – External tools (e.g. Brave Search) via Model Context Protocol
 * **Modular Architecture** – Clean separation of core, services, modules, and events
 
@@ -26,7 +26,7 @@ This project is designed to be highly extensible: features are implemented as in
 * Optional external services depending on enabled modules:
 
   * Discord Bot Token
-  * LLM API keys (Groq, OpenRouter, etc.)
+  * LLM API keys (Groq, OpenRouter, OpenAI supported APIs.)
   * Azure Speech resource (for TTS)
   * Brave Search API key (for MCP tools)
 
@@ -37,8 +37,8 @@ This project is designed to be highly extensible: features are implemented as in
 Clone the repository:
 
 ```bash
-git clone https://github.com/yourname/kleeborp-ai.git
-cd kleeborp-ai
+git clone https://github.com/gobboo/kleeborp.git
+cd kleeborp
 ```
 
 Install dependencies using **uv**:
@@ -77,7 +77,7 @@ This will:
 ## Project Structure
 
 ```text
-kleeborp-ai/
+kleeborp/
 ├── src/
 │   ├── run.py               # Entry point
 │   ├── core/                # Application core & lifecycle
@@ -118,7 +118,7 @@ Each module lives under `src/modules/` and:
 * Registers itself with the `ModuleManager`
 * Communicates through the central `EventBus`
 
-This keeps systems decoupled and easy to extend.
+Went with this system as it makes it easier for all systems to communicate and pass data around.
 
 ---
 
@@ -128,6 +128,7 @@ This keeps systems decoupled and easy to extend.
 * Designed for experimentation with multiple LLM providers
 * Memory is persisted locally via ChromaDB
 * Audio utilities support debugging raw PCM streams
+* Project is heavily WIP and can be improved in tons of areas, this is more of a prototype right now.
 
 ---
 
